@@ -1,0 +1,298 @@
+set Dimension 								= 2
+set Use years in output instead of seconds 	= true
+set Start time 								= 0
+set End time 								= 11e6
+#set End time 								= 105e3
+set Pressure normalization                  = no
+set Surface pressure                       	= 0
+set Adiabatic surface temperature 	 		= 273
+set Output directory 						= output
+set Nonlinear solver scheme 				= single Advection, iterated Stokes
+set Max nonlinear iterations in pre-refinement      = 0
+set Max nonlinear iterations               = 10
+set World builder file 						= geometry.wb
+set Resume computation                         = auto
+set Maximum time step                          = 1e3
+
+
+
+# In combination with simplified adiabatic and shear heating,
+# these parameters give the Extended Boussinesq approximation.
+subsection Formulation
+  set Formulation          = custom
+  set Mass conservation    = incompressible
+  set Temperature equation = reference density profile
+  set Enable elasticity = true
+end
+
+subsection Heating model
+  set List of model names = shear heating, adiabatic heating
+  subsection Adiabatic heating
+    set Use simplified adiabatic heating = true
+  end
+end
+
+
+subsection Solver parameters
+    set Composition solver tolerance = 1e-12
+    set Temperature solver tolerance = 1e-12
+    subsection Stokes solver parameters
+        set Linear solver tolerance = 1e-6
+    end
+end
+
+# Chooses whether to use DG and limiter for composition
+subsection Discretization
+   set Composition polynomial degree = 2
+   set Stokes velocity polynomial degree = 2
+   set Temperature polynomial degree = 2
+   set Use discontinuous composition discretization = true
+   subsection Stabilization parameters
+      set Use limiter for discontinuous composition solution = true
+      set Global composition maximum = 500e6, 500e6, 500e6, 1, 100
+      set Global composition minimum = -500e6, -500e6, -500e6, 0, 0
+   end
+end
+
+subsection Geometry model
+    set Model name = box
+    subsection Box
+        set X extent = 11600e3
+    	set Y extent = 2900e3
+    	set X repetitions = 8
+    	set Y repetitions = 2
+        #set X periodic = true
+    end
+end
+
+#subsection Nullspace removal
+#  set Remove nullspace                        = net translation
+#end
+
+subsection Boundary velocity model
+    set Tangential velocity boundary indicators = right, left, bottom
+end
+
+
+
+# Advecting the free surface vertically rather than
+# in the surface normal direction can result in a
+# more stable mesh when the deformation is large
+subsection Mesh deformation
+  set Mesh deformation boundary indicators        = top: free surface, top: diffusion
+    set Additional tangential mesh velocity boundary indicators = left,right
+  subsection Free surface
+    set Surface velocity projection = normal
+    set Free surface stabilization theta = 0.5
+  end
+  subsection Diffusion
+    # The diffusivity
+    set Hillslope transport coefficient = 1e-7
+  end
+
+end
+
+
+
+subsection Initial temperature model
+    set Model name = world builder
+end
+
+
+subsection Initial composition model
+    #set Model name = world builder
+    set List of model names = world builder, function
+    set List of model operators = add, maximum
+    subsection Function
+      set Function expression = 0;0;0;0;0.05*rand_seed(0);
+    end
+end
+
+
+
+subsection Boundary temperature model
+  set Fixed temperature boundary indicators = bottom, top
+  set List of model names = box
+
+  subsection Box
+    set Bottom temperature = 3209
+    set Left temperature   = 0
+    set Right temperature  = 0
+    set Top temperature    = 273
+  end
+end
+
+
+#remove this for periodic
+subsection Boundary composition model
+    set Fixed composition boundary indicators = right,left
+    set List of model names = initial composition
+    subsection Initial composition
+        set Minimal composition = 0
+        set Maximal composition = 1
+    end
+end
+
+
+
+subsection Compositional fields
+   set Number of fields = 5
+   set Compositional field methods = field, field, field, field, particles
+   set Names of fields = ve_stress_xx, ve_stress_yy, ve_stress_xy, weaklayer, plastic_strain
+   set Mapped particle properties =  plastic_strain:plastic_strain
+end
+
+
+
+subsection Material model
+    set Model name = visco plastic
+    #set Material averaging = harmonic average
+    #set Material averaging = harmonic average only viscosity
+    set Material averaging = none
+    subsection Visco Plastic
+        set Reference temperature = 273
+        set Reference viscosity = 1e20
+        set Minimum viscosity = 5e18
+        set Maximum viscosity = 1e24
+        set Phase transition depths = background:100e3|660e3, weaklayer:150e3|660e3
+        set Phase transition widths = background:2e3|5e3, weaklayer:20e3|5e3
+        set Phase transition temperatures = background:1273.0|1969.0, weaklayer:1173.0|1969.0
+        set Phase transition Clapeyron slopes = background:-1.617e9|-2e6, weaklayer:0.0e6|-2e6
+        set Thermal diffusivities = 1.0e-6
+        set Heat capacities = 1250.0
+        set Densities = ve_stress_xx:3300, ve_stress_yy:3300, ve_stress_xy:3300, background:3300.0|3300.0|3300.0, weaklayer:3300.0|3300.0|3300.0, plastic_strain:3300.0
+        set Thermal expansivities = 3.0e-5
+        set Viscosity averaging scheme = harmonic
+        #set Viscous flow law = diffusion
+        set Viscous flow law = composite
+
+
+
+        set Grain size = 1.0000e-02
+        set Prefactors for diffusion creep = ve_stress_xx:1.92e-11, ve_stress_yy:1.92e-11, ve_stress_xy:1.92e-11, background:1.92e-11|1.92e-11|1.67e-11, \
+                weaklayer:1.92e-11|1.92e-11|1.67e-11, plastic_strain:1.92e-11
+        set Grain size exponents for diffusion creep = ve_stress_xx:0, ve_stress_yy:0, ve_stress_xy:0, background:0|0|0.0, \
+                weaklayer:0.0|0|0.0, plastic_strain:0
+        set Activation energies for diffusion creep = ve_stress_xx:300e3, ve_stress_yy:300e3, ve_stress_xy:300e3, background:300e3|300e3|300e3, \
+                weaklayer:300e3|300e3|300e3, plastic_strain:300e3
+        set Activation volumes for diffusion creep = ve_stress_xx:4.4e-6, ve_stress_yy:4.4e-6, ve_stress_xy:4.4e-6, background:4.4e-6|4.4e-6|5.125e-06, \
+                weaklayer:4.4e-6|4.4e-6|5.125e-06, plastic_strain:4.4e-6
+
+
+        set Prefactors for dislocation creep          = ve_stress_xx:9.7e-18, ve_stress_yy:9.7e-18, ve_stress_xy:9.7e-18, background:9.7e-18|9.7e-18|9.7e-18, \
+                                                    weaklayer:9.7e-18, plastic_strain:9.7e-18
+        set Stress exponents for dislocation creep    = ve_stress_xx:3.5, ve_stress_yy:3.5, ve_stress_xy:3.5, background:3.5|3.5|1, weaklayer:3.5, plastic_strain:3.5
+        set Activation energies for dislocation creep = ve_stress_xx:530e3, ve_stress_yy:530e3, ve_stress_xy:530e3, background:530e3|530e3|530e3, weaklayer:530e3, plastic_strain:530e3
+        set Activation volumes for dislocation creep  = ve_stress_xx:14e-6, ve_stress_yy:14e-6, ve_stress_xy:14e-6, background:14e-6|14e-6|14e-6, weaklayer:14e-6, plastic_strain:14e-6
+
+
+        set Cohesions                   = ve_stress_xx:20e6, ve_stress_yy:20e6, ve_stress_xy:20e6, background:20e6, weaklayer:15e6, plastic_strain:20e6
+        set Angles of internal friction = ve_stress_xx:38.6, ve_stress_yy:38.6, ve_stress_xy:38.6, background:38.6, weaklayer:0.25|38.6|38.6, plastic_strain:38.6
+        set Maximum yield stress        = 10000e6
+        set Strain weakening mechanism = plastic weakening with plastic strain only
+        set Start plasticity strain weakening intervals = 0.
+        set End plasticity strain weakening intervals = 0.1
+        set Cohesion strain weakening factors = 1.0
+        set Friction strain weakening factors = 0.99
+
+
+        # Peierls creep parameters
+        set Include Peierls creep                     = true
+        set Peierls creep flow law                    = viscosity approximation
+        set Prefactors for Peierls creep              = ve_stress_xx:1.4e-24, ve_stress_yy:1.4e-24, ve_stress_xy:1.4e-24, background:4.5e-19|1.4e-24|1.4e-24, weaklayer:1.4e-24, plastic_strain:1.4e-24
+        set Activation energies for Peierls creep     = 272e3
+        set Activation volumes for Peierls creep      = 7e-6
+        set Peierls stresses                          = 5.9e9
+        set Stress exponents for Peierls creep        = 2.0
+        set Peierls fitting parameters                = 0.05
+        set Peierls glide parameters p                = 0.5
+        set Peierls glide parameters q                = 1.0
+
+
+        set Elastic shear moduli = 10e10
+        set Fixed elastic time step     = 2e3
+        set Use fixed elastic time step = true
+        set Use stress averaging        = true
+        set Include viscoelasticity     = true
+
+
+
+    end
+end
+
+
+subsection Mesh refinement
+  set Initial global refinement = 4
+  set Minimum refinement level  = 4
+  set Initial adaptive refinement = 6
+  set Time steps between mesh refinement       = 5
+  set Strategy = isosurfaces,  composition threshold, maximum refinement function
+  set Refinement fraction                = 0.2
+  set Coarsening fraction                = 0.35
+
+  subsection Isosurfaces
+    set Isosurfaces = min+5, min+5, Temperature: 0 | 973; min+4, min+4, Temperature: 973 | 1550; \
+                      min+3, min+3,Temperature: 1550 | 1700; min+2, min+2,Temperature: 1700 | 1950; min+1, min+1,Temperature: 1950 | 2300;
+  end
+
+  subsection Composition threshold
+    set Compositional field thresholds         = 10e9, 10e9, 10e9, 0.1, 10e9
+  end
+
+  subsection Maximum refinement function
+    set Coordinate system   = cartesian
+    set Variable names      = x, y
+    set Function constants  = ymax=2900e3
+    #set Function expression = ((ymax-y>=330e3) ? 9 : 10)
+    #set Function expression = if((ymax-y)<=200e3,  9 ,  if((ymax-y)<=500e3, 8, 7))
+    #set Function expression = if(((ymax-y)<=200e3 && (x-6800e3) <0) ,   10 ,  if((ymax-y)<=500e3, 8, 7))
+    set Function expression = if((ymax-y)<=150e3  && (x-6800e3) <0,   12 ,  if((ymax-y)<=400e3, 9, if((ymax-y)<=600e3, 8, 8)))
+  end
+
+
+end
+
+
+subsection Gravity model
+  set Model name = vertical
+
+  subsection Vertical
+    set Magnitude = 9.81
+  end
+end
+
+subsection Checkpointing
+   set Steps between checkpoint = 50
+   #set Time between checkpoint
+end
+
+
+
+#### parameteres needed to actually output temperature and compostion ####
+subsection Postprocess
+  set List of postprocessors = visualization, topography, particles
+  subsection Visualization
+    set List of output variables      = density, viscosity, strain rate, stress, strain rate tensor, nonadiabatic pressure, named additional outputs, principal stress
+    #set Output format                 = vtk
+    set Time between graphical output = 0.05e6
+    set Number of grouped files       = 0
+  end
+
+  subsection Topography
+     set Output to file = true
+     set Time between text output = 0.1e6
+  end
+  subsection Particles
+    set Number of particles = 50e6
+    set Minimum particles per cell  = 20
+    set Maximum particles per cell  = 30
+    set Load balancing strategy     = remove and add particles
+    set Time between data output = 0.05e6
+    set Data output format = vtu
+    set List of particle properties = viscoplastic strain invariants
+    set Particle generator name = reference cell
+    set Interpolation scheme = nearest neighbor
+  end
+
+
+end
